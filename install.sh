@@ -1,21 +1,25 @@
-tmp=$(mktemp -d) && cd "$tmp" && \
-wget https://github.com/Amaan-Dhanani/ttf-ms-win11-auto_deb/raw/refs/heads/main/ttf-ms-win11-auto-10.0.26100.1742-4-any.pkg.tar.zst && \
-tar -I zstd -xf *.pkg.tar.zst && \
-mkdir -p ms-win11-fonts/DEBIAN ms-win11-fonts/usr/share/fonts && \
-cp -r usr/share/fonts/* ms-win11-fonts/usr/share/fonts/ && \
-printf "Package: ms-win11-fonts
-Version: 10.0.26100.1742-4
-Section: fonts
-Priority: optional
-Architecture: all
-Maintainer: Converted from Arch
-Description: Microsoft Windows 11 fonts repackaged from Arch Linux
-" > ms-win11-fonts/DEBIAN/control && \
-chmod 755 ms-win11-fonts/DEBIAN && \
-chmod 644 ms-win11-fonts/DEBIAN/control && \
-dpkg-deb --build ms-win11-fonts && \
-sudo dpkg -i ms-win11-fonts.deb && \
-sudo fc-cache -fv && \
-cd "$OLDPWD" && \
-rm -rf "$tmp" && \
-echo "DONE: Fonts installed and ready to use"
+#!/usr/bin/env bash
+set -euo pipefail
+
+ISO_URL="https://software-static.download.prss.microsoft.com/dbazure/888969d5-f34g-4e03-ac9d-1f9786c66749/26100.1742.240906-0331.ge_release_svc_refresh_CLIENTENTERPRISEEVAL_OEMRET_x64FRE_en-us.iso"
+TARGET_DIR="/usr/share/fonts/ms-win11"
+
+echo "[*] Installing dependencies..."
+sudo apt update
+sudo apt install -y wget p7zip-full fontconfig
+
+sudo mkdir -p "$TARGET_DIR"
+
+echo "[*] Streaming fonts directly from ISO into $TARGET_DIR..."
+# List fonts in the ISO (assuming .ttf/.ttc files)
+FONT_LIST=$(wget -qO- "$ISO_URL" | 7z l -si -bd -slt | awk '/Path = /{print $3}' | grep -E '\.(ttf|ttc)$')
+
+for font in $FONT_LIST; do
+    echo "[*] Installing $(basename "$font")..."
+    wget -qO- "$ISO_URL" | 7z e -si -so "$font" | sudo tee "$TARGET_DIR/$(basename "$font")" >/dev/null
+done
+
+echo "[*] Updating font cache..."
+sudo fc-cache -f "$TARGET_DIR"
+
+echo "[+] Fonts installed directly."
