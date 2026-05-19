@@ -1,43 +1,49 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# URL for the Windows ISO
 ISO_URL="https://software-static.download.prss.microsoft.com/dbazure/888969d5-f34g-4e03-ac9d-1f9786c66749/26100.1742.240906-0331.ge_release_svc_refresh_CLIENTENTERPRISEEVAL_OEMRET_x64FRE_en-us.iso"
 
-WORKDIR=$(mktemp -d)
-ISO="$WORKDIR/win.iso"
-MNT="$WORKDIR/mnt"
+# Paths
+ISO="$HOME/Downloads/win11.iso"         # persistent ISO location
+WORKDIR=$(mktemp -d)                    # temporary working folder
+WIM="$WORKDIR/install.wim"
 FONTS="$WORKDIR/fonts"
 TARGET="/usr/share/fonts/ms-win11"
 
 cleanup() {
-    echo "[*] Cleaning up..."
-    sudo umount "$MNT" 2>/dev/null || true
-    [[ -n "${LOOPDEV:-}" ]] && sudo losetup -d "$LOOPDEV" 2>/dev/null || true
     rm -rf "$WORKDIR"
 }
 trap cleanup EXIT
 
 echo "[*] Installing dependencies..."
 sudo apt update
-sudo apt install -y wget p7zip-full util-linux fontconfig
+sudo apt install -y wget p7zip-full wimtools fontconfig
 
-mkdir -p "$MNT" "$FONTS"
+mkdir -p "$FONTS" "$TARGET"
 
-echo "[*] Downloading ISO (once)..."
-wget -O "$ISO" "$ISO_URL"
+# Download ISO only if it doesn't exist
+if [[ ! -f "$ISO" ]]; then
+    echo "[*] Downloading Windows ISO..."
+    wget -O "$ISO" "$ISO_URL"
+else
+    echo "[*] Using cached ISO at $ISO"
+fi
 
-echo "[*] Mounting ISO..."
-LOOPDEV=$(sudo losetup --find --show "$ISO")
-sudo mount -o ro "$LOOPDEV" "$MNT"
+# Extract only install.wim from ISO
+echo "[*] Extracting install.wim from ISO..."
+7z e "$ISO" "sources/install.wim" -o"$WORKDIR" -y >/dev/null
 
+# Extract only the fonts from install.wim
 echo "[*] Extracting fonts from install.wim..."
-7z e "$MNT/sources/install.wim" -o"$FONTS" "*.ttf" "*.ttc" -r >/dev/null
+wimlib-imagex extract "$WIM" 1 /Windows/Fonts "$FONTS"
 
+# Copy fonts to system folder
 echo "[*] Installing fonts..."
-sudo mkdir -p "$TARGET"
-sudo cp "$FONTS/"* "$TARGET/" 2>/dev/null || true
+sudo cp -u "$FONTS/"* "$TARGET/"  # -u = copy only if newer
 
+# Update font cache
 echo "[*] Updating font cache..."
 sudo fc-cache -f "$TARGET"
 
-echo "[+] Done successfully!"
+echo "[+] Done! Windows fonts installed successfully."
