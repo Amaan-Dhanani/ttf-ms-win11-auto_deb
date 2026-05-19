@@ -2,24 +2,43 @@
 set -euo pipefail
 
 ISO_URL="https://software-static.download.prss.microsoft.com/dbazure/888969d5-f34g-4e03-ac9d-1f9786c66749/26100.1742.240906-0331.ge_release_svc_refresh_CLIENTENTERPRISEEVAL_OEMRET_x64FRE_en-us.iso"
-TARGET_DIR="/usr/share/fonts/ms-win11"
+
+WORKDIR=$(mktemp -d)
+ISO="$WORKDIR/win.iso"
+MNT="$WORKDIR/mnt"
+FONTDIR="/usr/share/fonts/ms-win11"
+
+cleanup() {
+    echo "[*] Cleaning up..."
+    sudo umount "$MNT" 2>/dev/null || true
+    [[ -n "${LOOPDEV:-}" ]] && sudo losetup -d "$LOOPDEV" 2>/dev/null || true
+    rm -rf "$WORKDIR"
+}
+trap cleanup EXIT
 
 echo "[*] Installing dependencies..."
 sudo apt update
-sudo apt install -y wget p7zip-full fontconfig
+sudo apt install -y wget p7zip-full util-linux fontconfig
 
-sudo mkdir -p "$TARGET_DIR"
+mkdir -p "$MNT"
 
-echo "[*] Streaming fonts directly from ISO into $TARGET_DIR..."
-# List fonts in the ISO (assuming .ttf/.ttc files)
-FONT_LIST=$(wget -qO- "$ISO_URL" | 7z l -si -bd -slt | awk '/Path = /{print $3}' | grep -E '\.(ttf|ttc)$')
+echo "[*] Downloading ISO (once)..."
+wget -O "$ISO" "$ISO_URL"
 
-for font in $FONT_LIST; do
-    echo "[*] Installing $(basename "$font")..."
-    wget -qO- "$ISO_URL" | 7z e -si -so "$font" | sudo tee "$TARGET_DIR/$(basename "$font")" >/dev/null
-done
+echo "[*] Mounting ISO..."
+sudo mount -o loop "$ISO" "$MNT"
+
+echo "[*] Extracting fonts from install.wim..."
+mkdir -p "$WORKDIR/fonts"
+
+# correct approach: extract from WIM, not ISO stream
+7z e "$MNT/sources/install.wim" -o"$WORKDIR/fonts" "*.ttf" "*.ttc" -r >/dev/null
+
+echo "[*] Installing fonts..."
+sudo mkdir -p "$FONTDIR"
+sudo cp "$WORKDIR/fonts/"* "$FONTDIR/" 2>/dev/null || true
 
 echo "[*] Updating font cache..."
-sudo fc-cache -f "$TARGET_DIR"
+sudo fc-cache -f "$FONTDIR"
 
-echo "[+] Fonts installed directly."
+echo "[+] Fonts installed successfully!"
