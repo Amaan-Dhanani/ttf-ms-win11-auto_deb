@@ -1,5 +1,5 @@
 tmp=$(mktemp -d) && cd "$tmp" && \
-wget https://archlinuxgr.tiven.org/archlinux/x86_64/ttf-ms-win11-auto-10.0.26100.1742-4-any.pkg.tar.zst && \
+wget https://github.com/Amaan-Dhanani/ttf-ms-win11-auto_deb/raw/refs/heads/main/ttf-ms-win11-auto-10.0.26100.1742-4-any.pkg.tar.zst && \
 tar -I zstd -xf *.pkg.tar.zst && \
 mkdir -p ms-win11-fonts/DEBIAN ms-win11-fonts/usr/share/fonts && \
 cp -r usr/share/fonts/* ms-win11-fonts/usr/share/fonts/ && \
