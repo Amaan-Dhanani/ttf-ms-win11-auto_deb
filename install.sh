@@ -1,39 +1,21 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-ISO_URL="https://software-static.download.prss.microsoft.com/dbazure/888969d5-f34g-4e03-ac9d-1f9786c66749/26100.1742.240906-0331.ge_release_svc_refresh_CLIENTENTERPRISEEVAL_OEMRET_x64FRE_en-us.iso"
-ISO="$HOME/Downloads/win11.iso"
-TARGET="/usr/share/fonts/ms-win11"
-WORKDIR=$(mktemp -d)
-FONTS="$WORKDIR/fonts"
-
-cleanup() {
-    rm -rf "$WORKDIR"
-}
-trap cleanup EXIT
-
-echo "[*] Installing dependencies..."
-sudo apt update
-sudo apt install -y wget wimtools fontconfig p7zip-full
-
-mkdir -p "$FONTS" "$TARGET"
-
-# Download ISO only if missing
-if [[ ! -f "$ISO" ]]; then
-    echo "[*] Downloading Windows ISO..."
-    wget -O "$ISO" "$ISO_URL"
-else
-    echo "[*] Using cached ISO at $ISO"
-fi
-
-echo "[*] Extracting fonts directly from ISO..."
-# Stream install.wim from ISO to wimlib-imagex
-7z e "$ISO" "sources/install.wim" -so | wimlib-imagex extract - "$FONTS" /Windows/Fonts
-
-echo "[*] Installing fonts..."
-sudo cp -u "$FONTS/"* "$TARGET/"
-
-echo "[*] Updating font cache..."
-sudo fc-cache -f "$TARGET"
-
-echo "[+] Done! Fonts installed ultra-fast."
+tmp=$(mktemp -d) && cd "$tmp" && \
+wget https://archlinuxgr.tiven.org/archlinux/x86_64/ttf-ms-win11-auto-10.0.26100.1742-4-any.pkg.tar.zst && \
+tar -I zstd -xf *.pkg.tar.zst && \
+mkdir -p ms-win11-fonts/DEBIAN ms-win11-fonts/usr/share/fonts && \
+cp -r usr/share/fonts/* ms-win11-fonts/usr/share/fonts/ && \
+printf "Package: ms-win11-fonts
+Version: 10.0.26100.1742-4
+Section: fonts
+Priority: optional
+Architecture: all
+Maintainer: Converted from Arch
+Description: Microsoft Windows 11 fonts repackaged from Arch Linux
+" > ms-win11-fonts/DEBIAN/control && \
+chmod 755 ms-win11-fonts/DEBIAN && \
+chmod 644 ms-win11-fonts/DEBIAN/control && \
+dpkg-deb --build ms-win11-fonts && \
+sudo dpkg -i ms-win11-fonts.deb && \
+sudo fc-cache -fv && \
+cd "$OLDPWD" && \
+rm -rf "$tmp" && \
+echo "DONE: Fonts installed and ready to use"
